@@ -1,0 +1,402 @@
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-alt: #1c2128;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --accent-bg: #1f6feb;
+  --user-bubble: #21262d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.muted {
+  color: var(--text-dim);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100vh;
+}
+
+/* ---------- Repo pane (left) — styled to resemble github.com's own dark UI ---------- */
+
+.repo-pane {
+  --gh-bg: var(--bg);
+  --gh-header-bg: var(--panel);
+  --gh-border: var(--border);
+  --gh-text: var(--text);
+  --gh-text-muted: var(--text-dim);
+  --gh-link: var(--accent);
+  --gh-row-hover: var(--panel-alt);
+
+  display: flex;
+  flex-direction: column;
+  background: var(--gh-bg);
+  color: var(--gh-text);
+  border-right: 1px solid var(--border);
+  min-width: 0;
+  min-height: 0;
+}
+
+.repo-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--gh-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.repo-icon {
+  color: var(--gh-text-muted);
+  flex-shrink: 0;
+}
+
+.repo-breadcrumb {
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+
+.repo-breadcrumb a {
+  color: var(--gh-link);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.repo-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.repo-breadcrumb .crumb-sep {
+  color: var(--gh-text-muted);
+  margin: 0 2px;
+}
+
+.repo-breadcrumb .crumb-current {
+  font-weight: 600;
+}
+
+.repo-branch-badge {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--gh-text-muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  background: var(--gh-header-bg);
+  border: 1px solid var(--gh-border);
+  border-radius: 12px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.repo-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* File table: GitHub's directory listing, top-of-page, one level at a time */
+
+.file-table {
+  border: 1px solid var(--gh-border);
+  border-radius: 6px;
+  margin: 16px;
+  overflow: hidden;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: var(--gh-bg);
+  border: none;
+  border-bottom: 1px solid var(--gh-border);
+  padding: 7px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88em;
+  color: var(--gh-text);
+}
+
+.file-row:last-child {
+  border-bottom: none;
+}
+
+.file-row:hover {
+  background: var(--gh-row-hover);
+}
+
+.file-row .row-icon {
+  flex-shrink: 0;
+  color: var(--gh-text-muted);
+}
+
+.file-row.is-dir .row-icon {
+  color: var(--gh-link);
+}
+
+.file-row .row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* README / file content, below the file table — like scrolling down a repo homepage */
+
+.content-section {
+  padding: 4px 16px 24px;
+}
+
+.content-path {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+  color: var(--gh-text-muted);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gh-border);
+}
+
+.content-view h1, .content-view h2, .content-view h3 {
+  border-bottom: 1px solid var(--gh-border);
+  padding-bottom: 6px;
+}
+
+.content-view a {
+  color: var(--gh-link);
+}
+
+.content-view pre, .content-view .highlight {
+  border-radius: 6px;
+  overflow-x: auto;
+  background: var(--gh-header-bg);
+  border: 1px solid var(--gh-border);
+}
+
+.content-view .highlight pre {
+  padding: 12px;
+  margin: 0;
+  border: none;
+}
+
+/* ---------- Chat pane (right) ---------- */
+
+.chat-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-title {
+  font-weight: 600;
+}
+
+.chat-subtitle {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin-top: 2px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat-message {
+  display: flex;
+}
+
+.chat-message.user {
+  justify-content: flex-end;
+}
+
+.chat-message.user .bubble {
+  background: var(--user-bubble);
+  border-radius: 12px;
+  padding: 10px 14px;
+  max-width: 80%;
+}
+
+.chat-message.assistant .bubble {
+  max-width: 100%;
+  line-height: 1.55;
+}
+
+.chat-message.assistant .bubble > *:first-child {
+  margin-top: 0;
+}
+
+.chat-message.assistant .bubble > *:last-child {
+  margin-bottom: 0;
+}
+
+.provider-badge {
+  display: block;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.chat-message.assistant .bubble pre {
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.chat-message.assistant .bubble code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.citation-chip {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.75em;
+  color: var(--text-dim);
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.citation-chip:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.typing-indicator {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.chat-error {
+  color: #f85149;
+}
+
+.chat-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #f85149;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9em;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-input-row textarea {
+  flex: 1;
+  resize: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.95em;
+}
+
+.chat-input-row textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.chat-input-row button {
+  background: var(--accent-bg);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-input-row button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .repo-pane {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
