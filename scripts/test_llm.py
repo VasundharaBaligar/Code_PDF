@@ -14,7 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.prompt_builder import build_messages
 from app.providers.router import stream_answer
-from app.retrieval import find_cross_references, find_mentioned_path, load_corpus, search
+from app.retrieval import (
+    find_cross_references,
+    find_mentioned_path,
+    get_structure_note,
+    is_enumeration_query,
+    load_corpus,
+    search,
+)
 
 
 async def main() -> None:
@@ -43,9 +50,20 @@ async def main() -> None:
                 "module meant to be imported."
             )
         print(f"File reference check: {file_reference_note}")
+
+    file_structure_note = None
+    if mentioned_path and is_enumeration_query(question):
+        file_structure_note = get_structure_note(mentioned_path)
+        print(f"Function/class inventory: {file_structure_note}")
     print()
 
-    messages = build_messages(question, history=[], retrieved_chunks=chunks, file_reference_note=file_reference_note)
+    messages = build_messages(
+        question,
+        history=[],
+        retrieved_chunks=chunks,
+        file_reference_note=file_reference_note,
+        file_structure_note=file_structure_note,
+    )
 
     print("--- model response ---")
     async for kind, payload in stream_answer(messages):

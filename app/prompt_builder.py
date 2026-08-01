@@ -26,7 +26,13 @@ SYSTEM_PROMPT = (
     "If the question has multiple distinct parts (e.g. what a file does, AND where "
     "it's used, AND whether it's imported), answer each part as its own short "
     "sentence rather than blending them into one — clarity over brevity when a "
-    "question genuinely has multiple parts."
+    "question genuinely has multiple parts.\n\n"
+    "Special case: if asked to count or list functions/classes/methods in a file, and "
+    "a 'Function/class inventory' fact is present in the context below, use that exact "
+    "list and count verbatim — it was computed by parsing the real file, so it is more "
+    "reliable than counting chunks yourself. Do not add, remove, or recount items "
+    "against it, and do not count a variable merely assigned from a call (e.g. "
+    "`x = jax.jit(...)`) as a function."
 )
 
 # Repeated right next to the question (not just in the system message) because small
@@ -50,6 +56,7 @@ def build_messages(
     history: list[dict],
     retrieved_chunks: list[RetrievedChunk],
     file_reference_note: str | None = None,
+    file_structure_note: str | None = None,
 ) -> list[dict]:
     if retrieved_chunks:
         context_block = "\n\n".join(
@@ -61,6 +68,8 @@ def build_messages(
 
     if file_reference_note:
         context_block = f"{context_block}\n\nFile reference check: {file_reference_note}"
+    if file_structure_note:
+        context_block = f"{context_block}\n\nFunction/class inventory: {file_structure_note}"
 
     messages = [
         {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nRelevant repo context:\n{context_block}"}

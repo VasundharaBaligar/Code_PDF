@@ -7,7 +7,13 @@ from collections.abc import AsyncIterator
 
 from app.prompt_builder import build_messages
 from app.providers.router import stream_answer
-from app.retrieval import find_cross_references, find_mentioned_path, search
+from app.retrieval import (
+    find_cross_references,
+    find_mentioned_path,
+    get_structure_note,
+    is_enumeration_query,
+    search,
+)
 
 
 def _build_retrieval_query(message: str, history: list[dict]) -> str:
@@ -49,7 +55,11 @@ async def stream_chat_response(message: str, history: list[dict]) -> AsyncIterat
                 "module meant to be imported."
             )
 
-    messages = build_messages(message, history, chunks, file_reference_note)
+    file_structure_note = None
+    if mentioned_path and is_enumeration_query(retrieval_query):
+        file_structure_note = get_structure_note(mentioned_path)
+
+    messages = build_messages(message, history, chunks, file_reference_note, file_structure_note)
 
     async for kind, payload in stream_answer(messages):
         if kind == "meta":

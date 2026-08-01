@@ -37,6 +37,22 @@ class Chunk:
     text: str
 
 
+def _windowed_chunks(path: str, lines: list[str], start_line: int, end_line: int, chunk_id_offset: int) -> list[Chunk]:
+    """Split lines[start_line-1:end_line] (1-indexed, inclusive) into ~WINDOW_LINES chunks."""
+    chunks: list[Chunk] = []
+    stride = WINDOW_LINES - OVERLAP_LINES
+    pos = start_line
+    while pos <= end_line:
+        end = min(pos + WINDOW_LINES - 1, end_line)
+        snippet = "\n".join(lines[pos - 1 : end]).strip()
+        if snippet:
+            chunks.append(Chunk(path, chunk_id_offset + len(chunks), pos, end, snippet))
+        if end == end_line:
+            break
+        pos += stride
+    return chunks
+
+
 def chunk_python_file(path: str, text: str) -> list[Chunk]:
     lines = text.splitlines()
     try:
@@ -44,27 +60,31 @@ def chunk_python_file(path: str, text: str) -> list[Chunk]:
     except SyntaxError:
         return chunk_generic(path, text)
 
-    top_level_defs = [
-        node
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-    ]
-    if not top_level_defs:
+    if not tree.body:
         return chunk_generic(path, text)
 
+    # Walk top-level statements in order. Each function/class gets its own
+    # chunk; everything else (imports, config, and -- critically for
+    # script-style files -- module-level code *between and after* defs,
+    # like `foo = jax.jit(...)` calls or the actual training loop) gets
+    # windowed too, so no line of the file is silently left unindexed.
     chunks: list[Chunk] = []
+    cursor = 1
 
-    # Header chunk: imports, module docstring, constants before the first def/class.
-    first_start = top_level_defs[0].lineno
-    if first_start > 1:
-        header_text = "\n".join(lines[: first_start - 1]).strip()
-        if header_text:
-            chunks.append(Chunk(path, len(chunks), 1, first_start - 1, header_text))
+    def flush_module_level(start_line: int, end_line: int) -> None:
+        if start_line > end_line:
+            return
+        chunks.extend(_windowed_chunks(path, lines, start_line, end_line, len(chunks)))
 
-    for node in top_level_defs:
-        start, end = node.lineno, node.end_lineno or node.lineno
-        snippet = "\n".join(lines[start - 1 : end])
-        chunks.append(Chunk(path, len(chunks), start, end, snippet))
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            flush_module_level(cursor, node.lineno - 1)
+            end = node.end_lineno or node.lineno
+            snippet = "\n".join(lines[node.lineno - 1 : end])
+            chunks.append(Chunk(path, len(chunks), node.lineno, end, snippet))
+            cursor = end + 1
+
+    flush_module_level(cursor, len(lines))
 
     return chunks
 
@@ -91,20 +111,7 @@ def chunk_generic(path: str, text: str) -> list[Chunk]:
     lines = text.splitlines()
     if not lines:
         return []
-
-    chunks: list[Chunk] = []
-    stride = WINDOW_LINES - OVERLAP_LINES
-    start = 0
-    while start < len(lines):
-        end = min(start + WINDOW_LINES, len(lines))
-        snippet = "\n".join(lines[start:end]).strip()
-        if snippet:
-            chunks.append(Chunk(path, len(chunks), start + 1, end, snippet))
-        if end == len(lines):
-            break
-        start += stride
-
-    return chunks
+    return _windowed_chunks(path, lines, 1, len(lines), 0)
 
 
 def chunk_file(path: str, text: str) -> list[Chunk]:
