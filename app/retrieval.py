@@ -50,7 +50,7 @@ def load_corpus() -> None:
     _bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks])
 
 
-def _find_mentioned_path(query: str) -> str | None:
+def find_mentioned_path(query: str) -> str | None:
     """
     If the query names a specific file -- exactly, or a close-enough typo --
     return its full path. BM25 has no concept of "this literally is the file
@@ -71,6 +71,28 @@ def _find_mentioned_path(query: str) -> str | None:
     return None
 
 
+def find_cross_references(mentioned_path: str) -> list[str]:
+    """
+    Search every other cached file's actual content for the module's
+    basename (without extension) as a real import/reference check --
+    grounds "is this used/imported elsewhere?" questions in a verified
+    fact instead of letting the model guess and hallucinate an answer.
+    """
+    from app import db
+
+    module_name = mentioned_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    if not module_name:
+        return []
+
+    referencing_paths = []
+    for row in db.list_files_with_content():
+        if row["path"] == mentioned_path:
+            continue
+        if module_name in row["content"]:
+            referencing_paths.append(row["path"])
+    return referencing_paths
+
+
 def search(query: str, k: int = 6) -> list[RetrievedChunk]:
     if _corpus is None or _bm25 is None:
         load_corpus()
@@ -84,7 +106,7 @@ def search(query: str, k: int = 6) -> list[RetrievedChunk]:
 
     # Filename match wins a guaranteed slice of the context budget, regardless
     # of how it happens to rank on generic word overlap.
-    mentioned_path = _find_mentioned_path(query)
+    mentioned_path = find_mentioned_path(query)
     if mentioned_path:
         file_indices = [i for i, c in enumerate(_corpus) if c["path"] == mentioned_path]
         boosted_budget = min(len(file_indices), max(3, k // 2))

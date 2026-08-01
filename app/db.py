@@ -27,6 +27,13 @@ def list_files() -> list[sqlite3.Row]:
         ).fetchall()
 
 
+def list_files_with_content() -> list[sqlite3.Row]:
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT path, content FROM files WHERE content IS NOT NULL"
+        ).fetchall()
+
+
 def get_file(path: str) -> sqlite3.Row | None:
     with get_connection() as conn:
         return conn.execute(

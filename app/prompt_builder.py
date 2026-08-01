@@ -17,7 +17,16 @@ SYSTEM_PROMPT = (
     "to inspect their own machine (e.g. Python version, GPU/CUDA availability, installed "
     "package versions), then separately state the specific requirements found in the "
     "repo context (e.g. required Python/CUDA version, base image, key dependencies) so "
-    "they can compare the two."
+    "they can compare the two.\n\n"
+    "Special case: if the user asks whether a file is imported, used, or referenced "
+    "elsewhere in the repo, and a 'File reference check' fact is present in the context "
+    "below, state that fact directly and confidently — do not guess, and never say a "
+    "file is imported by itself. If no such fact is present, say plainly that you "
+    "can't confirm cross-file usage from the given context rather than inferring it.\n\n"
+    "If the question has multiple distinct parts (e.g. what a file does, AND where "
+    "it's used, AND whether it's imported), answer each part as its own short "
+    "sentence rather than blending them into one — clarity over brevity when a "
+    "question genuinely has multiple parts."
 )
 
 # Repeated right next to the question (not just in the system message) because small
@@ -40,6 +49,7 @@ def build_messages(
     user_message: str,
     history: list[dict],
     retrieved_chunks: list[RetrievedChunk],
+    file_reference_note: str | None = None,
 ) -> list[dict]:
     if retrieved_chunks:
         context_block = "\n\n".join(
@@ -48,6 +58,9 @@ def build_messages(
         )
     else:
         context_block = "(no relevant repo content found for this question)"
+
+    if file_reference_note:
+        context_block = f"{context_block}\n\nFile reference check: {file_reference_note}"
 
     messages = [
         {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nRelevant repo context:\n{context_block}"}

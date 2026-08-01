@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.prompt_builder import build_messages
 from app.providers.router import stream_answer
-from app.retrieval import load_corpus, search
+from app.retrieval import find_cross_references, find_mentioned_path, load_corpus, search
 
 
 async def main() -> None:
@@ -29,9 +29,23 @@ async def main() -> None:
     print(f"Retrieved {len(chunks)} relevant chunks:")
     for chunk in chunks:
         print(f"  - {chunk.path}:{chunk.start_line}-{chunk.end_line} (score={chunk.score:.2f})")
+
+    file_reference_note = None
+    mentioned_path = find_mentioned_path(question)
+    if mentioned_path:
+        cross_refs = find_cross_references(mentioned_path)
+        if cross_refs:
+            file_reference_note = f"{mentioned_path} is referenced in: {', '.join(cross_refs)}."
+        else:
+            file_reference_note = (
+                f"{mentioned_path} is not imported or referenced by any other file in "
+                "this repo — it appears to be a standalone/entry-point script, not a "
+                "module meant to be imported."
+            )
+        print(f"File reference check: {file_reference_note}")
     print()
 
-    messages = build_messages(question, history=[], retrieved_chunks=chunks)
+    messages = build_messages(question, history=[], retrieved_chunks=chunks, file_reference_note=file_reference_note)
 
     print("--- model response ---")
     async for kind, payload in stream_answer(messages):
