@@ -6,6 +6,10 @@ const Chat = (() => {
   const inputEl = document.getElementById("chat-input");
   const sendBtn = document.getElementById("chat-send");
   const initialGreetingEl = document.getElementById("initial-greeting");
+  const newChatBtn = document.getElementById("new-chat-btn");
+  // Captured before any mutation, so "New Chat" can restore the exact
+  // original markup regardless of how many messages came and went.
+  const initialGreetingHTML = initialGreetingEl.outerHTML;
 
   // In-memory + persisted conversation: [{role, content, citations?, error?}]
   let messages = [];
@@ -202,6 +206,16 @@ const Chat = (() => {
     saveHistory();
   }
 
+  function startNewChat() {
+    messages = [];
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_) {
+      /* localStorage unavailable — nothing to clear */
+    }
+    messagesEl.innerHTML = initialGreetingHTML;
+  }
+
   function autoGrow() {
     inputEl.style.height = "auto";
     inputEl.style.height = `${Math.min(inputEl.scrollHeight, 160)}px`;
@@ -210,6 +224,7 @@ const Chat = (() => {
   function init() {
     restoreHistory();
 
+    newChatBtn.addEventListener("click", startNewChat);
     inputEl.addEventListener("input", autoGrow);
 
     formEl.addEventListener("submit", (e) => {

@@ -35,14 +35,47 @@ class RetrievedChunk:
 
 _corpus: list[dict] | None = None
 _bm25: BM25Okapi | None = None
+_identifier_to_paths: dict[str, list[str]] | None = None
 
 
 def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN_RE.findall(text)]
 
 
+def _build_identifier_index() -> dict[str, list[str]]:
+    """
+    Maps class/function names (e.g. "eggroll" -> the EggRoll class) to the
+    file(s) that define them. Conceptual questions ("how does the EGGROLL
+    noiser work") name a *concept*, not a file -- BM25 alone routes these to
+    whichever file uses that word the most in prose (usually the README or
+    notebook), not the actual implementation, since it has no idea "EggRoll"
+    is a class defined in eggroll.py.
+
+    A name can collide across files (e.g. alteggroll.py reimplements
+    eggroll.py's exact class/function names as an alternate version) --
+    stored as a list so find_mentioned_path can disambiguate rather than
+    silently picking whichever file happened to be scanned first.
+    """
+    import ast
+
+    from app import db
+
+    index: dict[str, list[str]] = {}
+    for row in db.list_files_with_content():
+        if not row["path"].endswith(".py"):
+            continue
+        try:
+            tree = ast.parse(row["content"])
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                index.setdefault(node.name.lower(), []).append(row["path"])
+    return index
+
+
 def load_corpus() -> None:
-    global _corpus, _bm25
+    global _corpus, _bm25, _identifier_to_paths
 
     chunks: list[dict] = []
     with open(CHUNKS_PATH) as f:
@@ -53,6 +86,7 @@ def load_corpus() -> None:
 
     _corpus = chunks
     _bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks])
+    _identifier_to_paths = _build_identifier_index()
 
 
 def find_mentioned_path(query: str) -> str | None:
@@ -89,6 +123,29 @@ def find_mentioned_path(query: str) -> str | None:
         close = difflib.get_close_matches(token, stem_to_path.keys(), n=1, cutoff=0.72)
         if close:
             return stem_to_path[close[0]]
+
+    # Concept fallback: route by known top-level class/function names, so
+    # questions about what something *does* (not what file it's in) still
+    # find the file that implements it. Stricter cutoff than the filename
+    # fallbacks since generic-sounding identifiers are more collision-prone.
+    if _identifier_to_paths:
+        for token in _TOKEN_RE.findall(query):
+            if len(token) < 4:
+                continue
+            key = token.lower()
+            candidates = _identifier_to_paths.get(key)
+            if candidates is None:
+                close = difflib.get_close_matches(key, _identifier_to_paths.keys(), n=1, cutoff=0.85)
+                if close:
+                    candidates = _identifier_to_paths[close[0]]
+            if candidates:
+                if len(candidates) == 1:
+                    return candidates[0]
+                # Name collision across files (e.g. an "alt"/experimental
+                # reimplementation reusing the same names) -- prefer whichever
+                # one the rest of the repo actually imports, as a proxy for
+                # "the real implementation" over an unused alternate.
+                return max(candidates, key=lambda p: len(find_cross_references(p)))
     return None
 
 

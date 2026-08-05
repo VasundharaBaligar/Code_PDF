@@ -209,6 +209,10 @@ body {
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .chat-title {
@@ -219,6 +223,22 @@ body {
   color: var(--text-dim);
   font-size: 0.85em;
   margin-top: 2px;
+}
+
+#new-chat-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+#new-chat-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .chat-messages {

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Groq is tried first if a key is set (fast, free, no local compute needed);
     # Ollama is the always-available fallback with zero external dependency.
     groq_api_key: str = ""
-    groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "llama-3.3-70b-versatile"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
     # Files above this size (bytes) are treated as large binary/data assets:

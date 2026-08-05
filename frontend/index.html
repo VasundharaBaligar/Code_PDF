@@ -31,8 +31,11 @@
 
   <main class="chat-pane">
     <header class="chat-header">
-      <div class="chat-title">HyperscaleES Assistant</div>
-      <div class="chat-subtitle">Ask anything about this repo — answered for free via Groq, with local Ollama as a fallback.</div>
+      <div class="chat-header-text">
+        <div class="chat-title">HyperscaleES Assistant</div>
+        <div class="chat-subtitle">Ask anything about this repo — answered for free via Groq, with local Ollama as a fallback.</div>
+      </div>
+      <button type="button" id="new-chat-btn" title="Clear this conversation and start over">New Chat</button>
     </header>
     <div class="chat-messages" id="chat-messages">
       <div class="chat-message assistant" id="initial-greeting">
