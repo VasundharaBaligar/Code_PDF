@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     github_repo_name: str = "HyperscaleES"
     github_token: str = ""
 
+    # The paper this repo implements ("Evolution Strategies at the Hyperscale").
+    # We ingest arXiv's LaTeX source rather than the PDF: equations arrive as
+    # real LaTeX instead of OCR guesswork, and \label{} anchors give precise,
+    # named citation targets.
+    arxiv_id: str = "2511.16652"
+
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5-coder:7b"
 

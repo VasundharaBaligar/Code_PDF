@@ -31,6 +31,13 @@ class RetrievedChunk:
     end_line: int
     text: str
     score: float
+    # Populated for paper (LaTeX) chunks only; None for code.
+    label: str | None = None
+    heading: str | None = None
+
+    @property
+    def is_paper(self) -> bool:
+        return self.path.endswith(".tex")
 
 
 _corpus: list[dict] | None = None
@@ -208,6 +215,49 @@ def get_structure_note(mentioned_path: str) -> str | None:
     return f"{mentioned_path} contains exactly {func_part}; {class_part}."
 
 
+def _is_paper_index(i: int) -> bool:
+    assert _corpus is not None
+    return _corpus[i]["path"].endswith(".tex")
+
+
+def _ensure_cross_corpus(
+    selected: list[int], ranked: list[int], scores, k: int, min_minority: int = 2
+) -> list[int]:
+    """
+    Guarantee the answer sees both corpora when both are relevant.
+
+    Without this, one side starves the other: a question like "which function
+    implements the paper's low-rank update?" routes to eggroll.py, the filename
+    boost claims half the budget, and BM25 fills the rest with code -- so zero
+    paper context reaches the model despite the question explicitly asking
+    about the paper. Swaps the weakest majority-corpus picks for the strongest
+    minority-corpus ones.
+    """
+    if not selected:
+        return selected
+
+    paper_sel = [i for i in selected if _is_paper_index(i)]
+    code_sel = [i for i in selected if not _is_paper_index(i)]
+    if paper_sel and code_sel:
+        return selected
+
+    want_paper = not paper_sel
+    candidates = [
+        i
+        for i in ranked
+        if i not in selected and scores[i] > 0 and _is_paper_index(i) == want_paper
+    ]
+    if not candidates:
+        return selected
+
+    swap_in = candidates[:min_minority]
+    majority = paper_sel or code_sel
+    # Drop the weakest majority picks, keeping the strongest ones.
+    droppable = sorted(majority, key=lambda i: scores[i])[: len(swap_in)]
+    kept = [i for i in selected if i not in droppable]
+    return kept + swap_in
+
+
 def search(query: str, k: int = 6) -> list[RetrievedChunk]:
     if _corpus is None or _bm25 is None:
         load_corpus()
@@ -243,6 +293,12 @@ def search(query: str, k: int = 6) -> list[RetrievedChunk]:
         selected_indices.append(i)
         seen.add(i)
 
+    # Skipped for enumeration queries, which deliberately claim the whole file:
+    # swapping chunks out there would reintroduce the undercounting this
+    # full-file coverage exists to prevent.
+    if not _ENUMERATION_RE.search(query):
+        selected_indices = _ensure_cross_corpus(selected_indices, ranked_indices, scores, k)
+
     results = []
     for i in selected_indices:
         chunk = _corpus[i]
@@ -254,6 +310,8 @@ def search(query: str, k: int = 6) -> list[RetrievedChunk]:
                 end_line=chunk["end_line"],
                 text=chunk["text"],
                 score=float(scores[i]),
+                label=chunk.get("label"),
+                heading=chunk.get("heading"),
             )
         )
     return results

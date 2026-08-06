@@ -11,6 +11,7 @@ Usage:
 
 import ast
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -27,6 +28,16 @@ EXCLUDED_PATHS = {"LICENSE", ".gitignore"}
 WINDOW_LINES = 60
 OVERLAP_LINES = 10
 
+# LaTeX semantic boundaries. Theorem-like environments are to a paper what
+# functions are to code: self-contained units that lose meaning when split.
+LATEX_HEADING_RE = re.compile(r"^\s*\\(?:sub)*section\*?\{(.+?)\}")
+LATEX_SECTION_LEVEL_RE = re.compile(r"^\s*\\(sub)*section\*?\{")
+LATEX_ENV_BEGIN_RE = re.compile(
+    r"^\s*\\begin\{(theorem|lemma|proof|definition|assumption|corollary"
+    r"|proposition|remark|algorithm)\*?\}"
+)
+LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
+
 
 @dataclass
 class Chunk:
@@ -35,6 +46,11 @@ class Chunk:
     start_line: int
     end_line: int
     text: str
+    # Paper chunks carry their LaTeX \label anchor (a stable, author-defined
+    # citation target) and a Section > Subsection breadcrumb for context.
+    # Both stay None for code chunks.
+    label: str | None = None
+    heading: str | None = None
 
 
 def _windowed_chunks(path: str, lines: list[str], start_line: int, end_line: int, chunk_id_offset: int) -> list[Chunk]:
@@ -114,11 +130,105 @@ def chunk_generic(path: str, text: str) -> list[Chunk]:
     return _windowed_chunks(path, lines, 1, len(lines), 0)
 
 
+def _latex_blocks(lines: list[str]) -> list[tuple[int, int, str | None]]:
+    """
+    Split LaTeX into (start_line, end_line, heading) semantic blocks.
+
+    Boundaries are headings and theorem-like environments. A theorem/proof is
+    consumed whole through its \\end{}, so a proof never gets split down the
+    middle -- the same reason we split Python at function boundaries rather
+    than at arbitrary line counts.
+    """
+    blocks: list[tuple[int, int, str | None]] = []
+    section: str | None = None
+    subsection: str | None = None
+    block_start = 1
+    i = 0
+
+    def heading() -> str | None:
+        parts = [p for p in (section, subsection) if p]
+        return " > ".join(parts) if parts else None
+
+    def close(end_line: int) -> None:
+        nonlocal block_start
+        if end_line >= block_start:
+            blocks.append((block_start, end_line, heading()))
+        block_start = end_line + 1
+
+    while i < len(lines):
+        line = lines[i]
+        lineno = i + 1
+
+        heading_match = LATEX_HEADING_RE.match(line)
+        if heading_match:
+            close(lineno - 1)
+            level_match = LATEX_SECTION_LEVEL_RE.match(line)
+            is_subsection = bool(level_match and level_match.group(1))
+            if is_subsection:
+                subsection = heading_match.group(1)
+            else:
+                section, subsection = heading_match.group(1), None
+            block_start = lineno
+            i += 1
+            continue
+
+        env_match = LATEX_ENV_BEGIN_RE.match(line)
+        if env_match:
+            close(lineno - 1)
+            env = env_match.group(1)
+            end_re = re.compile(rf"\\end\{{{env}\*?\}}")
+            j = i
+            while j < len(lines) and not end_re.search(lines[j]):
+                j += 1
+            env_end = min(j + 1, len(lines))
+            blocks.append((lineno, env_end, heading()))
+            block_start = env_end + 1
+            i = env_end
+            continue
+
+        i += 1
+
+    close(len(lines))
+    return blocks
+
+
+def chunk_latex_file(path: str, text: str) -> list[Chunk]:
+    lines = text.splitlines()
+    if not lines:
+        return []
+
+    chunks: list[Chunk] = []
+    for start_line, end_line, heading in _latex_blocks(lines):
+        block_lines = lines[start_line - 1 : end_line]
+        if not "\n".join(block_lines).strip():
+            continue
+
+        # Long prose runs still get windowed so no single chunk dominates the
+        # context budget; theorem/proof blocks are almost always under this.
+        for windowed in _windowed_chunks(path, lines, start_line, end_line, len(chunks)):
+            label_match = LABEL_RE.search(windowed.text)
+            chunks.append(
+                Chunk(
+                    path=windowed.path,
+                    chunk_id=len(chunks),
+                    start_line=windowed.start_line,
+                    end_line=windowed.end_line,
+                    text=windowed.text,
+                    label=label_match.group(1) if label_match else None,
+                    heading=heading,
+                )
+            )
+
+    return chunks
+
+
 def chunk_file(path: str, text: str) -> list[Chunk]:
     if path.endswith(".py"):
         return chunk_python_file(path, text)
     if path.endswith(".ipynb"):
         return chunk_notebook(path, text)
+    if path.endswith(".tex"):
+        return chunk_latex_file(path, text)
     return chunk_generic(path, text)
 
 
@@ -143,12 +253,22 @@ def main() -> None:
         all_chunks.extend(chunks)
         indexed_files += 1
 
+    code_chunks = len(all_chunks)
+
+    # The paper's LaTeX sections, if scripts/ingest_paper.py has been run.
+    paper_files = 0
+    for row in db.list_paper_files():
+        chunks = chunk_latex_file(row["path"], row["content"])
+        all_chunks.extend(chunks)
+        paper_files += 1
+
     with open(CHUNKS_PATH, "w") as f:
         for chunk in all_chunks:
             f.write(json.dumps(asdict(chunk)) + "\n")
 
-    print(f"Indexed {len(all_chunks)} chunks from {indexed_files} files ({skipped_files} skipped).")
-    print(f"Written to: {CHUNKS_PATH}")
+    print(f"Indexed {code_chunks} chunks from {indexed_files} repo files ({skipped_files} skipped).")
+    print(f"Indexed {len(all_chunks) - code_chunks} chunks from {paper_files} paper sections.")
+    print(f"Total: {len(all_chunks)} chunks written to {CHUNKS_PATH}")
 
 
 if __name__ == "__main__":

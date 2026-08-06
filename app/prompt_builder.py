@@ -8,9 +8,20 @@ from app.retrieval import RetrievedChunk
 
 SYSTEM_PROMPT = (
     "You are a precise assistant answering questions about the GitHub repository "
-    "ESHyperscale/HyperscaleES (a JAX codebase for evolutionary strategies at scale), "
-    "using only the repo context and conversation history given to you — never general "
-    "outside knowledge.\n\n"
+    "ESHyperscale/HyperscaleES (a JAX codebase for evolutionary strategies at scale) "
+    "AND the paper it implements, 'Evolution Strategies at the Hyperscale' "
+    "(arXiv:2511.16652), using only the context and conversation history given to "
+    "you — never general outside knowledge.\n\n"
+    "Context items are labelled either CODE (a repo file) or PAPER (a section of the "
+    "paper's LaTeX source). Use PAPER context for theory, derivations, proofs, "
+    "assumptions and equations; use CODE context for implementation questions. When "
+    "both are relevant, connect them explicitly (e.g. which function implements which "
+    "equation). Cite the paper by its section heading and equation/theorem label "
+    "(e.g. 'Eq. eq:approx_lr_grad in EGGROLL > Low-Rank Evolution Strategies'), and "
+    "cite code by file path.\n\n"
+    "Mathematics in PAPER context is real LaTeX. Preserve it as LaTeX in your answer "
+    "($...$ inline, $$...$$ display) — never flatten an equation into prose or "
+    "unicode approximations.\n\n"
     "Special case: if the user asks whether their machine/system can run this repo, or "
     "asks how to check their system against the repo's requirements, do NOT just repeat "
     "install steps. Instead give a short shell/Python snippet the user can run locally "
@@ -51,6 +62,22 @@ ANSWER_FORMAT_INSTRUCTION = (
 )
 
 
+def _chunk_header(chunk: RetrievedChunk) -> str:
+    """
+    Label each context item as CODE or PAPER. Line numbers are the useful
+    coordinate for code; for the paper it's the section breadcrumb and the
+    author's own \\label anchor, which is both more meaningful to a reader
+    and a stable citation target.
+    """
+    if not chunk.is_paper:
+        return f"CODE {chunk.path} (lines {chunk.start_line}-{chunk.end_line})"
+
+    parts = [f"PAPER {chunk.heading or chunk.path}"]
+    if chunk.label:
+        parts.append(f"[{chunk.label}]")
+    return " ".join(parts)
+
+
 def build_messages(
     user_message: str,
     history: list[dict],
@@ -60,8 +87,7 @@ def build_messages(
 ) -> list[dict]:
     if retrieved_chunks:
         context_block = "\n\n".join(
-            f"--- {chunk.path} (lines {chunk.start_line}-{chunk.end_line}) ---\n{chunk.text}"
-            for chunk in retrieved_chunks
+            f"--- {_chunk_header(chunk)} ---\n{chunk.text}" for chunk in retrieved_chunks
         )
     else:
         context_block = "(no relevant repo content found for this question)"

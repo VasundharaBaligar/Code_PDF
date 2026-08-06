@@ -34,6 +34,26 @@ def list_files_with_content() -> list[sqlite3.Row]:
         ).fetchall()
 
 
+def list_paper_files() -> list[sqlite3.Row]:
+    """Paper LaTeX sections in document order; empty if the paper isn't ingested."""
+    with get_connection() as conn:
+        try:
+            return conn.execute(
+                "SELECT path, order_index, content FROM paper_files ORDER BY order_index"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+
+def get_paper_meta() -> dict[str, str]:
+    with get_connection() as conn:
+        try:
+            rows = conn.execute("SELECT key, value FROM paper_meta").fetchall()
+        except sqlite3.OperationalError:
+            return {}
+        return {row["key"]: row["value"] for row in rows}
+
+
 def get_file(path: str) -> sqlite3.Row | None:
     with get_connection() as conn:
         return conn.execute(

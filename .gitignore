@@ -5,3 +5,7 @@ data/*.sqlite3
 data/index/
 .env
 .DS_Store
+
+# Paper LaTeX source — downloaded from arXiv at build time by
+# scripts/ingest_paper.py, not committed (2.7MB of figure PDFs).
+arXiv-*/
