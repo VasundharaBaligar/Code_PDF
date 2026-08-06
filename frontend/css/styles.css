@@ -293,6 +293,12 @@ body {
   overflow-x: auto;
 }
 
+.chat-message.assistant .bubble .katex-display {
+  margin: 0.75em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .chat-message.assistant .bubble code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.9em;

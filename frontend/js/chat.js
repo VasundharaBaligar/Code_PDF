@@ -30,6 +30,20 @@ const Chat = (() => {
     },
   });
 
+  function renderMath(el) {
+    if (!window.renderMathInElement) return;
+    window.renderMathInElement(el, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+      ],
+      // Streamed/partial text can contain an unmatched "$" mid-token; render
+      // it as visible error text instead of throwing and breaking the rest
+      // of the message.
+      throwOnError: false,
+    });
+  }
+
   function saveHistory() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
@@ -115,6 +129,7 @@ const Chat = (() => {
     contentDiv.className = "msg-content";
     contentDiv.innerHTML = md.render(msg.content || "");
     bubble.appendChild(contentDiv);
+    renderMath(contentDiv);
     addCitations(bubble, msg.citations);
   }
 
@@ -194,6 +209,10 @@ const Chat = (() => {
           banner.textContent = errorMessage;
           assistantBubble.appendChild(banner);
         } else if (event.type === "done") {
+          // Rendered once here, not per-token: mid-stream text can contain an
+          // unmatched "$" (equation not yet fully arrived), which would
+          // otherwise misrender/flicker on every intermediate token.
+          if (contentDiv) renderMath(contentDiv);
           addCitations(assistantBubble, citations);
         }
       });
