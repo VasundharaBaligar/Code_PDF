@@ -258,7 +258,7 @@ def _ensure_cross_corpus(
     return kept + swap_in
 
 
-def search(query: str, k: int = 6) -> list[RetrievedChunk]:
+def search(query: str, k: int = 8) -> list[RetrievedChunk]:
     if _corpus is None or _bm25 is None:
         load_corpus()
     assert _corpus is not None and _bm25 is not None

@@ -3,6 +3,7 @@ Combines retrieval, prompt building, and the provider router into the
 actual event stream served by POST /api/chat.
 """
 
+import re
 from collections.abc import AsyncIterator
 
 from app.prompt_builder import build_messages
@@ -15,6 +16,13 @@ from app.retrieval import (
     search,
 )
 
+# Signals a question depends on antecedent context ("this file", "it", "the
+# function" with no name given) rather than standing on its own.
+_REFERENTIAL_RE = re.compile(
+    r"\b(this|that|these|those|it|its)\b|\bthe (file|function|class|method|module)\b",
+    re.IGNORECASE,
+)
+
 
 def _build_retrieval_query(message: str, history: list[dict]) -> str:
     """
@@ -22,10 +30,17 @@ def _build_retrieval_query(message: str, history: list[dict]) -> str:
     naming their subject again. BM25 and the filename-mention check only see
     the literal query text, so without this, retrieval loses the thread the
     moment a question refers back rather than re-naming what it's about.
-    Folding in the last couple of turns keeps retrieval "in the room" for
-    the conversation -- the model still gets the full structured history
-    separately for actually answering.
+
+    Only fold history in when the message actually looks referential. Doing
+    it unconditionally backfires the moment the conversation moves on: a new,
+    fully self-contained question ("explain why the paper considered the RNN
+    not transformer") got hijacked by an old, unrelated file mention still
+    sitting in history from several turns earlier -- the file-mention lookup
+    is a hard override, not a soft ranking signal, so stale context doesn't
+    just dilute results, it silently redirects the whole answer.
     """
+    if not history or not _REFERENTIAL_RE.search(message):
+        return message
     recent = history[-4:]
     recent_text = " ".join(m["content"] for m in recent)
     return f"{recent_text} {message}".strip()
@@ -33,7 +48,7 @@ def _build_retrieval_query(message: str, history: list[dict]) -> str:
 
 async def stream_chat_response(message: str, history: list[dict]) -> AsyncIterator[dict]:
     retrieval_query = _build_retrieval_query(message, history)
-    chunks = search(retrieval_query, k=6)
+    chunks = search(retrieval_query, k=8)
 
     seen_paths: set[str] = set()
     for chunk in chunks:

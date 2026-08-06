@@ -32,7 +32,7 @@ async def main() -> None:
     question = sys.argv[1]
 
     load_corpus()
-    chunks = search(question, k=6)
+    chunks = search(question, k=8)
     print(f"Retrieved {len(chunks)} relevant chunks:")
     for chunk in chunks:
         print(f"  - {chunk.path}:{chunk.start_line}-{chunk.end_line} (score={chunk.score:.2f})")
