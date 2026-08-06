@@ -145,11 +145,15 @@ def find_mentioned_path(query: str) -> str | None:
     ES-related file mentions "evolution").
     """
     assert _corpus is not None
-    basename_to_path = {c["path"].rsplit("/", 1)[-1]: c["path"] for c in _corpus}
+    # Lowercased consistently on both sides: filenames in this repo are
+    # lowercase, but query tokens aren't -- "RWKV" vs "rwkv7" scores 0.0
+    # similarity under difflib's case-sensitive comparison despite being an
+    # obvious match, silently breaking any acronym or capitalized mention.
+    basename_to_path = {c["path"].rsplit("/", 1)[-1].lower(): c["path"] for c in _corpus}
 
     # Filename-shaped tokens first (e.g. "sft_evolution.py", "stf_evolution.py").
     for token in _FILENAME_RE.findall(query):
-        token_name = token.rsplit("/", 1)[-1]
+        token_name = token.rsplit("/", 1)[-1].lower()
         if token_name in basename_to_path:
             return basename_to_path[token_name]
         close = difflib.get_close_matches(token_name, basename_to_path.keys(), n=1, cutoff=0.72)
@@ -163,9 +167,10 @@ def find_mentioned_path(query: str) -> str | None:
     for token in _TOKEN_RE.findall(query):
         if len(token) < 4:
             continue
-        if token in stem_to_path:
-            return stem_to_path[token]
-        close = difflib.get_close_matches(token, stem_to_path.keys(), n=1, cutoff=0.72)
+        token_lower = token.lower()
+        if token_lower in stem_to_path:
+            return stem_to_path[token_lower]
+        close = difflib.get_close_matches(token_lower, stem_to_path.keys(), n=1, cutoff=0.72)
         if close:
             return stem_to_path[close[0]]
 
