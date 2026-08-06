@@ -22,6 +22,18 @@ _ENUMERATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Pairs that mean the same thing in this corpus but share no common substring,
+# so no amount of stemming would connect them -- a question asking "why RNN
+# not Transformer" needs to reach a paper passage that says "recurrent model"
+# and "RWKV", never the bare acronym "RNN". Query-side only (see
+# _expand_query_tokens): the indexed corpus is left exactly as written.
+_SYNONYMS: dict[str, list[str]] = {
+    "rnn": ["recurrent"],
+    "rnns": ["recurrent"],
+    "cnn": ["convolutional"],
+    "cnns": ["convolutional"],
+}
+
 
 @dataclass
 class RetrievedChunk:
@@ -45,8 +57,34 @@ _bm25: BM25Okapi | None = None
 _identifier_to_paths: dict[str, list[str]] | None = None
 
 
+def _stem(token: str) -> str:
+    """
+    Conservative plural-stripping -- just enough to match "transformer"
+    against "transformers" (the exact gap that buried the paper's actual
+    explanation at rank 21). Deliberately not a full stemmer (e.g. Porter):
+    this corpus is half code, and aggressively mangling identifiers risks
+    more false matches than it's worth. Consistent between indexing and
+    querying is what matters -- both go through this same function.
+    """
+    if len(token) > 5 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 4 and token.endswith("es") and not token.endswith("ses"):
+        return token[:-2]
+    if len(token) > 4 and token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]
+    return token
+
+
 def _tokenize(text: str) -> list[str]:
-    return [t.lower() for t in _TOKEN_RE.findall(text)]
+    return [_stem(t.lower()) for t in _TOKEN_RE.findall(text)]
+
+
+def _expand_query_tokens(tokens: list[str]) -> list[str]:
+    """Query-side only: widen the bag of terms with known synonyms (see _SYNONYMS)."""
+    expanded = list(tokens)
+    for token in tokens:
+        expanded.extend(_SYNONYMS.get(token, []))
+    return expanded
 
 
 def _build_identifier_index() -> dict[str, list[str]]:
@@ -263,7 +301,7 @@ def search(query: str, k: int = 8) -> list[RetrievedChunk]:
         load_corpus()
     assert _corpus is not None and _bm25 is not None
 
-    scores = _bm25.get_scores(_tokenize(query))
+    scores = _bm25.get_scores(_expand_query_tokens(_tokenize(query)))
     ranked_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
 
     selected_indices: list[int] = []
