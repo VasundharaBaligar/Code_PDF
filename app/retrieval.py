@@ -38,6 +38,16 @@ _OVERVIEW_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "Show me the algorithm" questions. Measured on a real one: the paper's own
+# Algorithm 1 block ranked 25th and the implementing code 118th, so neither
+# reached the model -- it answered from the notebook's API walkthrough, which
+# is the plumbing rather than the method. Both are findable structurally.
+_ALGORITHM_RE = re.compile(
+    r"\b(?:core|main|the|its|actual)\s+algorithm\b|\balgorithm\b\s*\d*\s*(?:of|for|in|with)"
+    r"|\bpseudo[- ]?code\b|\bstep[- ]by[- ]step\b|\bhow does (?:it|the method|eggroll) work\b",
+    re.IGNORECASE,
+)
+
 # Where a work states its own thesis, in the order a reader would want them,
 # with how many opening chunks to take from each. README.org is included so
 # "what is this repo about" is grounded too -- and, since it isn't a .tex file,
@@ -264,6 +274,51 @@ def _overview_indices() -> list[int]:
     return picked
 
 
+def is_algorithm_query(query: str) -> bool:
+    return bool(_ALGORITHM_RE.search(query))
+
+
+def _best_path_for_identifier(name: str) -> str | None:
+    """Same collision rule as find_mentioned_path: the one the repo actually imports."""
+    candidates = (_identifier_to_paths or {}).get(name.lower())
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    return max(candidates, key=lambda p: len(find_cross_references(p)))
+
+
+def _algorithm_indices(code_chunks_per_impl: int = 3) -> list[int]:
+    """
+    The paper's algorithm environments, plus the code implementing them.
+
+    The link is the author's own label: an algorithm environment captioned
+    ``\\label{alg:eggroll}`` names "eggroll", which the identifier index maps to
+    the file defining that class -- so "the algorithm and its code" resolves
+    to both halves without hardcoding either.
+    """
+    assert _corpus is not None
+    picked: list[int] = []
+    impl_paths: list[str] = []
+
+    for i, chunk in enumerate(_corpus):
+        if "\\begin{algorithm}" not in chunk["text"]:
+            continue
+        picked.append(i)
+        label = chunk.get("label") or ""
+        if label.startswith("alg:"):
+            path = _best_path_for_identifier(label[len("alg:") :])
+            if path and path not in impl_paths:
+                impl_paths.append(path)
+
+    for path in impl_paths:
+        matches = [i for i, c in enumerate(_corpus) if c["path"] == path]
+        matches.sort(key=lambda i: _corpus[i]["chunk_id"])
+        picked.extend(matches[:code_chunks_per_impl])
+
+    return picked
+
+
 def is_enumeration_query(query: str) -> bool:
     return bool(_ENUMERATION_RE.search(query))
 
@@ -359,6 +414,12 @@ def search(query: str, k: int = 8) -> list[RetrievedChunk]:
     # stop -- claim those first so BM25 noise can't bury them.
     if is_overview_query(query):
         for i in _overview_indices():
+            if i not in seen:
+                selected_indices.append(i)
+                seen.add(i)
+
+    if is_algorithm_query(query):
+        for i in _algorithm_indices():
             if i not in seen:
                 selected_indices.append(i)
                 seen.add(i)

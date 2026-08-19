@@ -30,6 +30,28 @@ const Chat = (() => {
     },
   });
 
+  function normalizeMathDelimiters(text) {
+    // markdown-it's escape rule turns \[ into [ and \( into ( before KaTeX
+    // ever sees the text, so LaTeX written with those delimiters arrived as
+    // literal "[ \nabla ... ]". Rewrite them to $/$$ up front. Fenced code is
+    // left alone so a stray \( in a snippet isn't mangled; $-in-code is
+    // already safe because KaTeX auto-render skips <pre>/<code>.
+    return text
+      .split(/(```[\s\S]*?```)/g)
+      .map((seg, i) =>
+        i % 2 === 1
+          ? seg
+          : seg
+              .replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`)
+              .replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => `$${body}$`)
+      )
+      .join("");
+  }
+
+  function renderAnswer(text) {
+    return md.render(normalizeMathDelimiters(text || ""));
+  }
+
   function renderMath(el) {
     if (!window.renderMathInElement) return;
     window.renderMathInElement(el, {
@@ -65,7 +87,7 @@ const Chat = (() => {
     if (role === "user") {
       bubble.textContent = text;
     } else {
-      bubble.innerHTML = md.render(text || "");
+      bubble.innerHTML = renderAnswer(text);
     }
     wrapper.appendChild(bubble);
     messagesEl.appendChild(wrapper);
@@ -132,7 +154,7 @@ const Chat = (() => {
 
     const contentDiv = document.createElement("div");
     contentDiv.className = "msg-content";
-    contentDiv.innerHTML = md.render(msg.content || "");
+    contentDiv.innerHTML = renderAnswer(msg.content);
     bubble.appendChild(contentDiv);
     renderMath(contentDiv);
     addCitations(bubble, msg.citations);
@@ -205,7 +227,7 @@ const Chat = (() => {
           citations.push(event);
         } else if (event.type === "token") {
           answerText += event.text;
-          contentDiv.innerHTML = md.render(answerText);
+          contentDiv.innerHTML = renderAnswer(answerText);
           messagesEl.scrollTop = messagesEl.scrollHeight;
         } else if (event.type === "error") {
           errorMessage = event.message;
