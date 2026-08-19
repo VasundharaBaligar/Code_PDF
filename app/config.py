@@ -28,8 +28,17 @@ class Settings(BaseSettings):
     # Groq is tried first if a key is set (fast, free, no local compute needed);
     # Ollama is the always-available fallback with zero external dependency.
     groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-120b"
+    # Preference order, best first. Groq retires models without notice -- it
+    # dropped every Llama chat model mid-project -- so pinning a single one
+    # means an upstream change silently demotes every answer to the local
+    # fallback. The provider resolves this list against Groq's live catalogue
+    # and uses the best entry that actually exists.
+    groq_models: str = "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.6-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
+
+    @property
+    def groq_model_preferences(self) -> list[str]:
+        return [m.strip() for m in self.groq_models.split(",") if m.strip()]
 
     # Files above this size (bytes) are treated as large binary/data assets:
     # metadata is cached, but content is not stored or indexed.
