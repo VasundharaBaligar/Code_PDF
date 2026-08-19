@@ -22,6 +22,34 @@ _ENUMERATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Broad "what is this?" questions. BM25 rewards rare, distinctive terms, so a
+# question made entirely of common ones ("what is this paper all about") scores
+# close to noise -- measured: the abstract ranked 102nd, the introduction 56th,
+# while deep appendix subsections took the top spots. The sections that exist
+# precisely to answer this question are known up front, so route to them
+# structurally instead of hoping keyword overlap finds them.
+_OVERVIEW_RE = re.compile(
+    r"\bwhat(?:'s| is| are)?\s+(?:this|the)\s+(?:paper|repo|repository|project|codebase|code)\b"
+    r"|\bwhat\s+(?:is|are)\s+(?:it|this)\s+about\b"
+    r"|\b(?:summar(?:y|ise|ize)|overview|tl;?dr|gist|high[- ]level)\b"
+    r"|\bexplain\s+(?:this|the)\s+(?:paper|repo|repository|project|codebase)\b"
+    r"|\bwhat\s+(?:does|do)\s+(?:this|the|it)\s+(?:paper|repo|repository|project|codebase)?\s*(?:do|about)\b"
+    r"|\bwhat\s+is\s+(?:it|this)\s+trying\s+to\s+do\b",
+    re.IGNORECASE,
+)
+
+# Where a work states its own thesis, in the order a reader would want them,
+# with how many opening chunks to take from each. README.org is included so
+# "what is this repo about" is grounded too -- and, since it isn't a .tex file,
+# its presence also means the cross-corpus balancer sees both corpora
+# represented and leaves this deliberately-claimed set alone.
+_OVERVIEW_SECTIONS = (
+    ("00_abstract", 2),
+    ("01_introduction", 2),
+    ("07_conclusions", 1),
+    ("README.org", 1),
+)
+
 # Pairs that mean the same thing in this corpus but share no common substring,
 # so no amount of stemming would connect them -- a question asking "why RNN
 # not Transformer" needs to reach a paper passage that says "recurrent model"
@@ -221,6 +249,21 @@ def find_cross_references(mentioned_path: str) -> list[str]:
     return referencing_paths
 
 
+def is_overview_query(query: str) -> bool:
+    return bool(_OVERVIEW_RE.search(query))
+
+
+def _overview_indices() -> list[int]:
+    """Opening chunks of the abstract, introduction, conclusion and README."""
+    assert _corpus is not None
+    picked: list[int] = []
+    for marker, limit in _OVERVIEW_SECTIONS:
+        matches = [i for i, c in enumerate(_corpus) if marker in c["path"]]
+        matches.sort(key=lambda i: _corpus[i]["chunk_id"])
+        picked.extend(matches[:limit])
+    return picked
+
+
 def is_enumeration_query(query: str) -> bool:
     return bool(_ENUMERATION_RE.search(query))
 
@@ -311,6 +354,14 @@ def search(query: str, k: int = 8) -> list[RetrievedChunk]:
 
     selected_indices: list[int] = []
     seen: set[int] = set()
+
+    # An overview question is answered by the abstract/intro/conclusion, full
+    # stop -- claim those first so BM25 noise can't bury them.
+    if is_overview_query(query):
+        for i in _overview_indices():
+            if i not in seen:
+                selected_indices.append(i)
+                seen.add(i)
 
     # Filename match wins a guaranteed slice of the context budget, regardless
     # of how it happens to rank on generic word overlap.
