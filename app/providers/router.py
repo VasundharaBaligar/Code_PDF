@@ -4,12 +4,15 @@ key is configured; Ollama is always available as an automatic, zero-setup
 fallback so the app keeps working with no external account at all.
 """
 
+import logging
 from collections.abc import AsyncIterator
 
 from app.config import settings
 from app.providers import groq_provider, ollama_provider
 from app.providers.groq_provider import GroqError
 from app.providers.ollama_provider import OllamaError
+
+logger = logging.getLogger(__name__)
 
 
 async def stream_answer(messages: list[dict]) -> AsyncIterator[tuple[str, str]]:
@@ -28,7 +31,20 @@ async def stream_answer(messages: list[dict]) -> AsyncIterator[tuple[str, str]]:
             first_token = await groq_stream.__anext__()
         except StopAsyncIteration:
             first_token = None
-        except GroqError:
+        except GroqError as exc:
+            # Falling back silently is right for the user, but it once hid a
+            # total Groq outage for days: the configured model had been retired
+            # upstream, every request 404'd, and every answer quietly came from
+            # the weaker local model instead. A config error (retired model, bad
+            # key) is permanent and needs fixing; a rate limit fixes itself.
+            detail = str(exc)
+            permanent = "model_not_found" in detail or "invalid_api_key" in detail
+            logger.log(
+                logging.ERROR if permanent else logging.INFO,
+                "Groq unavailable (%s), falling back to Ollama: %s",
+                "CONFIG ERROR - needs fixing" if permanent else "transient",
+                detail[:300],
+            )
             async for event in _stream_ollama(messages):
                 yield event
             return

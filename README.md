@@ -10,7 +10,7 @@ paper content. $0 to run.
 ## Stack
 
 FastAPI + vanilla JS (no Node, no build step) · BM25 search, no vector DB · Groq
-(`llama-3.3-70b-versatile`, free) primary with local Ollama fallback · KaTeX for math ·
+(`openai/gpt-oss-120b`, free) primary with local Ollama fallback · KaTeX for math ·
 Render free tier.
 
 ## Run locally
