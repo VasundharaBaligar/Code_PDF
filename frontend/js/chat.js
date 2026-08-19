@@ -35,7 +35,12 @@ const Chat = (() => {
     window.renderMathInElement(el, {
       delimiters: [
         { left: "$$", right: "$$", display: true },
+        // \[..\] and \(..\) are standard LaTeX delimiters, and the model
+        // emits them unprompted -- without these they render as literal
+        // backslash-paren text instead of math.
+        { left: "\\[", right: "\\]", display: true },
         { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
       ],
       // Streamed/partial text can contain an unmatched "$" mid-token; render
       // it as visible error text instead of throwing and breaking the rest
